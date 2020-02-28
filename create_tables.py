@@ -1,47 +1,56 @@
 import pdb
 import pandas as pd
-import numpy as np
-import os
+import datetime as dt
 import re
-pd.set_option('use_inf_as_na', True)
+import os
+import sys
 
-ls = os.listdir()
-with open('../init.sql', 'w') as f:
-    for csv in ls:
-        match = re.search(r'.+(?=-2018)', csv)
-        if match==None:
+try: 
+    path=sys.argv[1]+'/'
+except:
+    path=''
+
+def mydateparser(x):
+    x = pd.to_datetime(x, infer_datetime_format=True, errors='coerce')
+    return x#.strftime("%Y-%m-%d %H:M%:S")
+
+with open('../init.sql', 'w') as sqlfile:
+    for csv in os.listdir():
+        tablename = re.match('.*-2018', csv)
+        if tablename is None:
+            print('not a csv')
             continue
-        tablename = match[0].replace('-','_')
-        newcols = []
-        df_out = pd.DataFrame()
-        chunks = pd.read_csv(csv, chunksize=200000, parse_dates=['Timestamp'], date_parser=lambda x: pd.to_datetime(x, errors='coerce',yearfirst=True, format='%d/%m/%Y %H:%M:%S'))
-        first = True
-        print('tablename: ',tablename)
-        for chunk in chunks:
-            chunk.drop(chunk[chunk['Dst Port']=='Dst Port'].index, inplace=True)
-           # for name, series in chunk.items():
-           #     if series.dtype.name!='category'
-           #         chunk[name]= pd.to_numeric(series, errors='coerce')
-            df_out = pd.concat([df_out, chunk])
-            if first:
-                df_out.to_csv('../clean_data/'+tablename+'.csv', mode='w', header=True, index=False)
-                newcols = chunk.columns.str.replace(' ','_').str.replace('/','_')
-                f.write('\connect trafficflow\n')
-                f.write('CREATE TABLE '+tablename+'(\n')
-                for index, dtype in enumerate(chunk.dtypes):
-                    if newcols[index]=='Label':
-                        f.write('Label TEXT\n')
-                    elif newcols[index] in ['Dst_Port','Protocol']:
-                        f.write(newcols[index]+' TEXT,\n')
-                    elif newcols[index]=='Timestamp':
-                        f.write('Timestamp TIMESTAMP,\n')
-                    elif dtype.name=='str':
-                        f.write(newcols[index]+' TEXT,\n')
-                    elif dtype=='int64':
-                        f.write(newcols[index]+' integer,\n')
-                    else:
-                        f.write(newcols[index]+' FLOAT,\n')
-                f.write(');\nCOPY '+tablename+' FROM \'/clean_data/'+tablename+'.csv\' CSV HEADER;\n')
-                first = False
-            else:
-                df_out.to_csv('../clean_data/'+tablename+'.csv', mode='a', header=False, index=False)
+        tablename = re.sub('-','_',tablename[0])
+        print('processing '+tablename)
+        first=True
+        if re.match('.*\.csv', csv):
+            chunks = pd.read_csv(csv, chunksize=600000, parse_dates=['Timestamp'], date_parser=mydateparser)
+            for chunk in chunks:
+                chunk.drop(chunk.index[chunk['Dst Port']=='Dst Port'], inplace=True)
+                if first==True:
+                    first=False
+                    newcols = chunk.columns.str.replace(' ','_').str.replace('/','_')
+                    chunk.to_csv('../'+path+tablename+'.csv', mode='w', index=False, header=True)
+                    sqlfile.write('\connect trafficflow;\n')
+                    sqlfile.write('CREATE TABLE '+tablename+'(\n')
+                    for index, dtype in enumerate(chunk.dtypes):
+                        if newcols[index]=='Label':
+                            sqlfile.write('Label TEXT\n')
+                        elif newcols[index] in ['Dst_Port', 'Protocol', 'Flow_ID', 'Src_Port', 'Src_IP', 'Dst_IP']:
+                            sqlfile.write(newcols[index]+' TEXT,\n')
+                        elif newcols[index]=='Timestamp':
+                            sqlfile.write(newcols[index]+' TIMESTAMP,\n')
+                        elif dtype == 'int64':
+                            if newcols[index]=='Flow_Duration':
+                                sqlfile.write(newcols[index]+ 'BIGINT,\n')
+                            else:
+                                sqlfile.write(newcols[index]+' INT,\n')
+                        else:
+                            sqlfile.write(newcols[index]+' FLOAT,\n')
+                    sqlfile.write(');\nCOPY '+tablename+' FROM \'/'+path+tablename+'.csv\' CSV HEADER;\n')
+                else:
+                    chunk.to_csv('../'+path+tablename+'.csv', index=False, mode='a', header=False)
+
+
+                    
+           
