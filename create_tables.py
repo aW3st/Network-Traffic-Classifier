@@ -27,6 +27,7 @@ with open('../init.sql', 'w') as sqlfile:
             chunks = pd.read_csv(csv, chunksize=600000, parse_dates=['Timestamp'], date_parser=mydateparser)
             for chunk in chunks:
                 chunk.drop(chunk.index[chunk['Dst Port']=='Dst Port'], inplace=True)
+                chunk.drop(chunk.index[chunk['Timestamp'].dt.year!=2018],inplace=True)
                 if first==True:
                     first=False
                     newcols = chunk.columns.str.replace(' ','_').str.replace('/','_')
@@ -42,7 +43,7 @@ with open('../init.sql', 'w') as sqlfile:
                             sqlfile.write(newcols[index]+' TIMESTAMP,\n')
                         elif dtype == 'int64':
                             if newcols[index]=='Flow_Duration':
-                                sqlfile.write(newcols[index]+ 'BIGINT,\n')
+                                sqlfile.write(newcols[index]+ ' BIGINT,\n')
                             else:
                                 sqlfile.write(newcols[index]+' INT,\n')
                         else:
