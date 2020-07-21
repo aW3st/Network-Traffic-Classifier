@@ -24,6 +24,6 @@ cd ..
 echo "building docker image..."
 sudo docker build -t nettrafficdb .
 echo "creating database container..."
-sudo docker run --rm --name NetTrafficClassifier -p $PORT:5432 -v "$(pwd)"/clean_data:/clean_data nettrafficdb
+sudo docker run --name NetTrafficClassifier -p $PORT:5432 -v "$(pwd)"/clean_data:/clean_data -d nettrafficdb
 echo "database now listening on port $PORT"
 
